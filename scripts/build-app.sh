@@ -1,17 +1,21 @@
 #!/bin/bash
-# Builds CodeOS.app in ./build. Requires the Xcode Command Line Tools on macOS 13+.
-# The result is ad-hoc signed for local use only. It is not notarized for distribution.
+# Builds a universal (Intel + Apple Silicon) CodeOS.app in ./build.
+# Ad-hoc signed for local use. Not notarized.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-swift build -c release
+swift build -c release --arch arm64
+swift build -c release --arch x86_64
 
 APP="build/CodeOS.app"
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
-cp ".build/release/CodeOS" "$APP/Contents/MacOS/CodeOS"
-cp "Resources/Info.plist" "$APP/Contents/Info.plist"
+lipo -create \
+    ".build/arm64-apple-macosx/release/CodeOS" \
+    ".build/x86_64-apple-macosx/release/CodeOS" \
+    -output "$APP/Contents/MacOS/CodeOS"
+cp Resources/Info.plist "$APP/Contents/Info.plist"
 codesign --force --sign - "$APP"
 
+lipo -info "$APP/Contents/MacOS/CodeOS"
 echo "Built $APP"
-echo "Run it with: open build/CodeOS.app"
