@@ -1,6 +1,7 @@
 import AppKit
 import CodeOSCore
 import SwiftUI
+import UniformTypeIdentifiers
 
 enum Format {
     static func bytes(_ value: Int64) -> String {
@@ -33,7 +34,7 @@ enum FolderPicker {
         panel.canChooseFiles = true
         panel.canChooseDirectories = false
         panel.allowsMultipleSelection = false
-        panel.allowedFileTypes = ["app"]
+        panel.allowedContentTypes = [.application]
         panel.directoryURL = URL(fileURLWithPath: "/Applications")
         panel.prompt = "Open With"
         return panel.runModal() == .OK ? panel.url : nil

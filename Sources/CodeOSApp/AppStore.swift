@@ -58,8 +58,8 @@ final class AppStore: ObservableObject {
         static let favorites = "favoriteAppBundleIDs"
     }
 
-    init(configStore: ConfigStore = AppStore.defaultConfigStore()) {
-        self.configStore = configStore
+    init(configStore: ConfigStore? = nil) {
+        self.configStore = configStore ?? AppStore.defaultConfigStore()
         let defaults = UserDefaults.standard
         appearance = AppearancePreference(rawValue: defaults.string(forKey: Keys.appearance) ?? "") ?? .system
         showHiddenFiles = defaults.bool(forKey: Keys.showHidden)

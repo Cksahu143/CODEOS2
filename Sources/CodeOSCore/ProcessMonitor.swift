@@ -26,13 +26,14 @@ public enum ProcessMonitor {
 
     /// Parses `ps -axo pid=,pcpu=,rss=,comm=`. `rss` is reported in kilobytes.
     public static func parse(_ output: String, limit: Int = 20) -> [ProcessSample] {
-        let samples: [ProcessSample] = output.split(separator: "\n").compactMap { line in
+        var samples: [ProcessSample] = []
+        for line in output.split(separator: "\n") {
             let parts = line.split(separator: " ", maxSplits: 3, omittingEmptySubsequences: true)
             guard parts.count == 4,
                   let pid = Int32(parts[0]),
                   let cpu = Double(parts[1]),
-                  let kilobytes = UInt64(parts[2]) else { return nil }
-            return ProcessSample(pid: pid, cpuPercent: cpu, residentBytes: kilobytes * 1024, command: String(parts[3]))
+                  let kilobytes = UInt64(parts[2]) else { continue }
+            samples.append(ProcessSample(pid: pid, cpuPercent: cpu, residentBytes: kilobytes * 1024, command: String(parts[3])))
         }
         let ranked = samples.sorted { lhs, rhs in
             if lhs.cpuPercent != rhs.cpuPercent { return lhs.cpuPercent > rhs.cpuPercent }
