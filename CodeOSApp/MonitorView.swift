@@ -1,0 +1,133 @@
+import CodeOSCore
+import SwiftUI
+
+/// Live view of memory, the busiest processes, and TCP ports that are listening.
+struct MonitorView: View {
+    @State private var memory: MemoryBreakdown?
+    @State private var processes: [ProcessSample] = []
+    @State private var ports: [ListeningPort] = []
+    @State private var lastUpdated: Date?
+    @State private var refreshInterval = 3
+    @State private var paused = false
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 24) {
+                memorySection
+                HStack(alignment: .top, spacing: 24) {
+                    processSection
+                    portSection
+                }
+            }
+            .padding(24)
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .navigationTitle("Monitor")
+        .toolbar {
+            ToolbarItemGroup(placement: .primaryAction) {
+                Picker("Refresh", selection: $refreshInterval) {
+                    Text("Every 2 s").tag(2)
+                    Text("Every 5 s").tag(5)
+                    Text("Every 10 s").tag(10)
+                }
+                .frame(width: 130)
+                Button { paused.toggle() } label: {
+                    Label(paused ? "Resume" : "Pause", systemImage: paused ? "play.fill" : "pause.fill")
+                }
+            }
+        }
+        .task(id: "\(refreshInterval)-\(paused)") {
+            guard !paused else { return }
+            while !Task.isCancelled {
+                await refresh()
+                try? await Task.sleep(nanoseconds: UInt64(refreshInterval) * 1_000_000_000)
+            }
+        }
+    }
+
+    private var memorySection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Memory").font(.headline)
+            if let memory {
+                ProgressView(value: memory.usageFraction)
+                    .tint(memory.usageFraction > 0.85 ? .red : .accentColor)
+                HStack(spacing: 18) {
+                    stat("Used", Format.bytes(memory.usedBytes))
+                    stat("App & system", Format.bytes(memory.activeBytes + memory.wiredBytes))
+                    stat("Compressed", Format.bytes(memory.compressedBytes))
+                    stat("Inactive", Format.bytes(memory.inactiveBytes))
+                    stat("Free", Format.bytes(memory.freeBytes))
+                    stat("Total", Format.bytes(memory.totalBytes))
+                }
+            } else {
+                Text("Memory statistics are unavailable.").foregroundStyle(.secondary)
+            }
+            if let lastUpdated {
+                Text("Updated \(Format.date(lastUpdated))").font(.caption).foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    private var processSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Busiest processes").font(.headline)
+            if processes.isEmpty {
+                Text("No process data yet.").foregroundStyle(.secondary)
+            }
+            ForEach(processes) { process in
+                HStack(spacing: 10) {
+                    Text(process.name).lineLimit(1).truncationMode(.middle)
+                    Spacer()
+                    Text(String(format: "%.1f%% CPU", process.cpuPercent))
+                        .font(.callout.monospacedDigit())
+                        .foregroundStyle(.secondary)
+                        .frame(width: 90, alignment: .trailing)
+                    Text(Format.bytes(process.residentBytes))
+                        .font(.callout.monospacedDigit())
+                        .foregroundStyle(.secondary)
+                        .frame(width: 80, alignment: .trailing)
+                }
+                .help(process.command)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var portSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Listening ports").font(.headline)
+            if ports.isEmpty {
+                Text("No listening TCP ports found.").foregroundStyle(.secondary)
+            }
+            ForEach(ports) { port in
+                HStack(spacing: 10) {
+                    Text(":\(port.port)")
+                        .font(.callout.monospacedDigit())
+                        .fontWeight(.medium)
+                        .frame(width: 70, alignment: .leading)
+                    Text(port.processName).lineLimit(1)
+                    Spacer()
+                    Text(port.address)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func stat(_ label: String, _ value: String) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(label).font(.caption).foregroundStyle(.secondary)
+            Text(value).font(.callout.monospacedDigit())
+        }
+    }
+
+    private func refresh() async {
+        memory = await Task.detached(priority: .utility) { MemoryMonitor.breakdown() }.value
+        processes = await Task.detached(priority: .utility) { (try? ProcessMonitor.sample(limit: 15)) ?? [] }.value
+        ports = await Task.detached(priority: .utility) { (try? PortScanner.listening()) ?? [] }.value
+        lastUpdated = Date()
+    }
+}
