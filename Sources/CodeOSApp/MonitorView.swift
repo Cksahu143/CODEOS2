@@ -113,7 +113,8 @@ struct MonitorView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    private func apply(_ change: @escaping () throws -> Void) {
+    @MainActor
+    private func apply(_ change: @MainActor @escaping () throws -> Void) {
         fanBusy = true
         Task { @MainActor in
             defer { fanBusy = false }
