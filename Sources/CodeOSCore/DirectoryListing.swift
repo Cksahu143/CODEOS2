@@ -61,7 +61,9 @@ public enum DirectoryListing {
     }
 
     public static func parent(of path: String) -> String {
-        URL(fileURLWithPath: path).deletingLastPathComponent().path
+        let standardized = URL(fileURLWithPath: path).standardizedFileURL.path
+        if standardized == "/" { return "/" }
+        return URL(fileURLWithPath: standardized).deletingLastPathComponent().standardizedFileURL.path
     }
 
     private static func compare<T: Comparable>(_ a: T?, _ b: T?) -> ComparisonResult {
