@@ -59,14 +59,15 @@ final class AppStore: ObservableObject {
     }
 
     init(configStore: ConfigStore? = nil) {
-        self.configStore = configStore ?? AppStore.defaultConfigStore()
+        let resolvedStore = configStore ?? AppStore.defaultConfigStore()
+        self.configStore = resolvedStore
         let defaults = UserDefaults.standard
         appearance = AppearancePreference(rawValue: defaults.string(forKey: Keys.appearance) ?? "") ?? .system
         showHiddenFiles = defaults.bool(forKey: Keys.showHidden)
         favoriteAppIDs = Set(defaults.stringArray(forKey: Keys.favorites) ?? [])
 
         do {
-            let result = try configStore.load()
+            let result = try resolvedStore.load()
             configuration = result.configuration
             if case let .recoveredFromCorruptFile(backup) = result.outcome {
                 notice = "Your configuration file could not be read and was moved to “\(backup.lastPathComponent)”. CodeOS started with empty settings."
