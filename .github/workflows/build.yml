@@ -7,8 +7,7 @@ on:
 
 jobs:
   build:
-    # macOS 13 matches the app's minimum deployment target and ships with Xcode 14.x.
-    runs-on: macos-13
+    runs-on: macos-14
     steps:
       - uses: actions/checkout@v4
 
@@ -21,7 +20,7 @@ jobs:
       - name: Run unit tests
         run: swift test
 
-      - name: Build CodeOS.app
+      - name: Build CodeOS.app for Intel Macs
         run: bash scripts/build-app.sh
 
       - name: Upload app bundle
