@@ -9,7 +9,7 @@ let package = Package(
         .library(name: "CodeOSCore", targets: ["CodeOSCore"])
     ],
     targets: [
-        .target(name: "CodeOSCore", path: "Sources/CodeOSCore"),
+        .target(name: "CodeOSCore", path: "Sources/CodeOSCore", linkerSettings: [.linkedFramework("IOKit")]),
         .executableTarget(name: "CodeOSApp", dependencies: ["CodeOSCore"], path: "Sources/CodeOSApp"),
         .testTarget(name: "CodeOSCoreTests", dependencies: ["CodeOSCore"], path: "Tests/CodeOSCoreTests")
     ]

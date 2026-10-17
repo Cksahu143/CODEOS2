@@ -9,11 +9,13 @@ struct MonitorView: View {
     @State private var lastUpdated: Date?
     @State private var refreshInterval = 3
     @State private var paused = false
+    @State private var thermal: ThermalSnapshot?
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 24) {
                 memorySection
+                sensorSection
                 HStack(alignment: .top, spacing: 24) {
                     processSection
                     portSection
@@ -43,6 +45,35 @@ struct MonitorView: View {
                 try? await Task.sleep(nanoseconds: UInt64(refreshInterval) * 1_000_000_000)
             }
         }
+    }
+
+    private var sensorSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Temperature and fans").font(.headline)
+            if let thermal, thermal.sensorsAvailable, !(thermal.temperatures.isEmpty && thermal.fans.isEmpty) {
+                HStack(alignment: .top, spacing: 36) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        ForEach(thermal.temperatures, id: \.name) { reading in
+                            stat(reading.name, String(format: "%.0f °C", reading.celsius))
+                        }
+                    }
+                    VStack(alignment: .leading, spacing: 4) {
+                        ForEach(thermal.fans, id: \.name) { fan in
+                            stat(fan.name, "\(fan.rpm) RPM" + range(fan))
+                        }
+                    }
+                }
+            } else {
+                Text(thermal?.note ?? "Reading sensors…").foregroundStyle(.secondary)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+
+    private func range(_ fan: FanReading) -> String {
+        guard let minRPM = fan.minRPM, let maxRPM = fan.maxRPM else { return "" }
+        return "  (\(minRPM)–\(maxRPM))"
     }
 
     private var memorySection: some View {
@@ -128,6 +159,7 @@ struct MonitorView: View {
         memory = await Task.detached(priority: .utility) { MemoryMonitor.breakdown() }.value
         processes = await Task.detached(priority: .utility) { (try? ProcessMonitor.sample(limit: 15)) ?? [] }.value
         ports = await Task.detached(priority: .utility) { (try? PortScanner.listening()) ?? [] }.value
+        thermal = await Task.detached(priority: .utility) { ThermalMonitor.read() }.value
         lastUpdated = Date()
     }
 }
