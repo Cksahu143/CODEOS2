@@ -10,12 +10,17 @@ struct MonitorView: View {
     @State private var refreshInterval = 3
     @State private var paused = false
     @State private var thermal: ThermalSnapshot?
+    @AppStorage("fanControlEnabled") private var fanControlEnabled = false
+    @State private var fanTarget: Double = 2000
+    @State private var fanBusy = false
+    @State private var fanStatus: String?
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 24) {
                 memorySection
                 sensorSection
+                fanControlSection
                 HStack(alignment: .top, spacing: 24) {
                     processSection
                     portSection
@@ -77,6 +82,50 @@ struct MonitorView: View {
         if let mode = fan.mode { text += mode == 0 ? "  · auto" : "  · manual" }
         if let target = fan.target { text += "  · target \(target)" }
         return text
+    }
+
+    private var fanControlSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Fan control").font(.headline)
+            Toggle("Allow CodeOS to set fan speed (asks for your administrator password each time)", isOn: $fanControlEnabled)
+            if fanControlEnabled, let fan = thermal?.fans.first, let low = fan.minRPM, let high = fan.maxRPM, high > low {
+                HStack {
+                    Slider(value: $fanTarget, in: Double(low)...Double(high), step: 100)
+                    Text("\(Int(fanTarget)) RPM")
+                        .font(.callout.monospacedDigit())
+                        .frame(width: 90, alignment: .trailing)
+                }
+                HStack(spacing: 10) {
+                    Button("Set speed") { apply { try FanControl.setManual(fan: 0, rpm: Int(fanTarget)) } }
+                        .disabled(fanBusy)
+                    Button("Return to automatic") { apply { try FanControl.restoreAutomatic() } }
+                        .disabled(fanBusy)
+                    if fanBusy { ProgressView().controlSize(.small) }
+                }
+                Text("Speeds stay within this fan's range (\(low)–\(high) RPM). Fans return to automatic when CodeOS quits.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            if let fanStatus {
+                Text(fanStatus).font(.callout).foregroundStyle(.secondary)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func apply(_ change: @escaping () throws -> Void) {
+        fanBusy = true
+        Task { @MainActor in
+            defer { fanBusy = false }
+            do {
+                try change()
+                fanStatus = FanControl.isManualActive
+                    ? "Fan 1 is under manual control. It returns to automatic when CodeOS quits."
+                    : "Fans are under automatic control."
+            } catch {
+                fanStatus = error.localizedDescription
+            }
+        }
     }
 
     private var memorySection: some View {

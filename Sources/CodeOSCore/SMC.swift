@@ -75,6 +75,7 @@ final class SMC {
     private static let kernelIndexSMC: UInt32 = 2
     private static let commandReadKeyInfo: UInt8 = 9
     private static let commandReadBytes: UInt8 = 5
+    private static let commandWriteBytes: UInt8 = 6
 
 
     init?() {
@@ -126,6 +127,40 @@ final class SMC {
             }
         }
         return result == KERN_SUCCESS ? output : nil
+    }
+
+    private func keyInfo(_ key: String) -> (UInt32, String)? {
+        var request = [UInt8](repeating: 0, count: SMC.structSize)
+        SMC.put32(&request, 0, SMC.fourCC(key))
+        request[42] = SMC.commandReadKeyInfo
+        guard let info = call(request), info[40] == 0 else { return nil }
+        return (SMC.get32(info, 28), SMC.fourCCString(SMC.get32(info, 32)))
+    }
+
+    /// Writes raw bytes. Refuses unless the SMC reports the expected type and size for the key.
+    private func write(_ key: String, type expected: String, bytes: [UInt8]) -> Bool {
+        guard key.utf8.count == 4, let info = keyInfo(key), info.1 == expected, Int(info.0) == bytes.count else {
+            return false
+        }
+        var request = [UInt8](repeating: 0, count: SMC.structSize)
+        SMC.put32(&request, 0, SMC.fourCC(key))
+        SMC.put32(&request, 28, info.0)
+        request[42] = SMC.commandWriteBytes
+        for (offset, byte) in bytes.enumerated() { request[48 + offset] = byte }
+        guard let output = call(request) else { return false }
+        return output[40] == 0
+    }
+
+    /// Fan mode: 0 = automatic, 1 = manual.
+    func writeUInt8(_ key: String, _ value: UInt8) -> Bool {
+        write(key, type: "ui8 ", bytes: [value])
+    }
+
+    /// Fan target speed in RPM, as the Intel SMC's unsigned 14.2 fixed-point value.
+    func writeFPE2(_ key: String, _ rpm: Int) -> Bool {
+        guard rpm >= 0, rpm * 4 <= 0xFFFF else { return false }
+        let raw = UInt16(rpm * 4)
+        return write(key, type: "fpe2", bytes: [UInt8(raw >> 8), UInt8(raw & 0xff)])
     }
 
     /// Decodes the value formats the Intel SMC uses for temperatures, fans, and counts.
