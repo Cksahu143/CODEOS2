@@ -7,7 +7,7 @@ struct MonitorView: View {
     @State private var processes: [ProcessSample] = []
     @State private var ports: [ListeningPort] = []
     @State private var lastUpdated: Date?
-    @State private var refreshInterval = 3
+    @State private var refreshInterval = 5
     @State private var paused = false
     @State private var thermal: ThermalSnapshot?
     @AppStorage("fanControlEnabled") private var fanControlEnabled = false
