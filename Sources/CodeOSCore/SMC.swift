@@ -12,6 +12,10 @@ public struct FanReading: Equatable {
     public let rpm: Int
     public let minRPM: Int?
     public let maxRPM: Int?
+    /// 0 = automatic (macOS controls the fan), 1 = manual. Read-only.
+    public var mode: Int? = nil
+    /// The speed the controller is aiming for, in RPM. Read-only.
+    public var target: Int? = nil
 }
 
 public struct ThermalSnapshot: Equatable {
@@ -52,7 +56,9 @@ public enum ThermalMonitor {
                     name: "Fan \(index + 1)",
                     rpm: Int(rpm),
                     minRPM: smc.value("F\(index)Mn").map { Int($0) },
-                    maxRPM: smc.value("F\(index)Mx").map { Int($0) }))
+                    maxRPM: smc.value("F\(index)Mx").map { Int($0) },
+                    mode: smc.value("F\(index)Md").map { Int($0) },
+                    target: smc.value("F\(index)Tg").map { Int($0) }))
             }
         }
         let note: String? = (temperatures.isEmpty && fans.isEmpty)

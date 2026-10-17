@@ -73,7 +73,10 @@ struct MonitorView: View {
 
     private func range(_ fan: FanReading) -> String {
         guard let minRPM = fan.minRPM, let maxRPM = fan.maxRPM else { return "" }
-        return "  (\(minRPM)–\(maxRPM))"
+        var text = "  (\(minRPM)–\(maxRPM))"
+        if let mode = fan.mode { text += mode == 0 ? "  · auto" : "  · manual" }
+        if let target = fan.target { text += "  · target \(target)" }
+        return text
     }
 
     private var memorySection: some View {
