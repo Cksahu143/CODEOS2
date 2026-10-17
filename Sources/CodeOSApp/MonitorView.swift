@@ -96,9 +96,9 @@ struct MonitorView: View {
                         .frame(width: 90, alignment: .trailing)
                 }
                 HStack(spacing: 10) {
-                    Button("Set speed") { apply { try FanControl.setManual(fan: 0, rpm: Int(fanTarget)) } }
+                    Button("Set speed") { Task { @MainActor in apply { try FanControl.setManual(fan: 0, rpm: Int(fanTarget)) } } }
                         .disabled(fanBusy)
-                    Button("Return to automatic") { apply { try FanControl.restoreAutomatic() } }
+                    Button("Return to automatic") { Task { @MainActor in apply { try FanControl.restoreAutomatic() } } }
                         .disabled(fanBusy)
                     if fanBusy { ProgressView().controlSize(.small) }
                 }
