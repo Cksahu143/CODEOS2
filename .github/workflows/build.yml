@@ -1,0 +1,30 @@
+name: Build CodeOS
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Show toolchain
+        run: |
+          xcode-select -p
+          xcrun --show-sdk-path
+          swift --version
+
+      - name: Run unit tests
+        run: swift test
+
+      - name: Build CodeOS.app for Intel Macs
+        run: bash scripts/build-app.sh
+
+      - name: Upload app bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: CodeOS-app
+          path: build/CodeOS.app
