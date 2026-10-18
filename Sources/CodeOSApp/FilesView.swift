@@ -162,6 +162,11 @@ struct FilesView: View {
         let picked = targets(for: item)
         Button("Open") { activate(item) }
         Button("Open in VS Code") { openInVSCode(picked) }
+        Button("Quick Look Preview") {
+            if let first = picked.first, !first.isDirectory {
+                PreviewWindows.show(URL(fileURLWithPath: first.path))
+            }
+        }
         Button("Open With…") { openWith(item) }
             .disabled(item.isDirectory)
         Button("Reveal in Finder") { reveal(picked) }

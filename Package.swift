@@ -11,7 +11,8 @@ let package = Package(
     ],
     targets: [
         .target(name: "CodeOSCore", path: "Sources/CodeOSCore", linkerSettings: [.linkedFramework("IOKit")]),
-        .executableTarget(name: "CodeOSApp", dependencies: ["CodeOSCore"], path: "Sources/CodeOSApp"),
+        .executableTarget(name: "CodeOSApp", dependencies: ["CodeOSCore"], path: "Sources/CodeOSApp",
+                          linkerSettings: [.linkedFramework("QuickLookUI")]),
         .executableTarget(name: "CodeOSFanHelper", dependencies: ["CodeOSCore"], path: "Sources/CodeOSFanHelper"),
         .testTarget(name: "CodeOSCoreTests", dependencies: ["CodeOSCore"], path: "Tests/CodeOSCoreTests")
     ]
