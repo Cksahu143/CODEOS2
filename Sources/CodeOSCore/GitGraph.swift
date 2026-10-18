@@ -51,6 +51,11 @@ public enum GitGraph {
 
     /// Loads recent history from every branch and tag, in Git's date order.
     public static func load(repository: String, limit: Int = 1000) throws -> [GitGraphRow] {
+        var isDirectory: ObjCBool = false
+        guard FileManager.default.fileExists(atPath: repository, isDirectory: &isDirectory),
+              isDirectory.boolValue else {
+            throw GitError.notARepository(repository)
+        }
         let probe = try ProcessRunner.run(
             executable: GitTool.resolved ?? "/usr/bin/git",
             arguments: ["rev-parse", "--is-inside-work-tree"],
