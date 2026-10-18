@@ -198,6 +198,7 @@ struct FilesView: View {
             .disabled(item.isDirectory)
         Button("Reveal in Finder") { reveal(picked) }
         Button("Open Terminal Here") { openTerminal(item) }
+        Button("Open in iTerm2") { openInITerm(item) }
         Divider()
         Button(picked.count > 1 ? "Rename \(picked.count) Items…" : "Rename…") {
             selection = Set(picked.map(\.path))
@@ -310,6 +311,17 @@ struct FilesView: View {
                 try await NativeOpen.open(urls, withApplicationAt: app)
             } catch {
                 message = "VS Code could not open these items: \(error.localizedDescription)"
+            }
+        }
+    }
+
+    private func openInITerm(_ item: FileItem) {
+        let folder = item.isDirectory ? item.path : DirectoryListing.parent(of: item.path)
+        Task {
+            do {
+                try await Task.detached(priority: .utility) { try ITermLauncher.open(folder: folder) }.value
+            } catch {
+                message = error.localizedDescription
             }
         }
     }

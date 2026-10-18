@@ -7,6 +7,7 @@ struct WorkspacesView: View {
     @State private var selectedID: UUID?
     @State private var editing: Workspace?
     @State private var confirmingDelete = false
+    @State private var terminalNote: String?
 
     private var selected: Workspace? {
         store.configuration.workspaces.first { $0.id == selectedID }
@@ -78,10 +79,18 @@ struct WorkspacesView: View {
                     .disabled(store.runningWorkflowID != nil)
 
                     Button("Edit") { editing = workspace }
+                    Button {
+                        openITerm(workspace.projectPath)
+                    } label: {
+                        Label("Open in iTerm2", systemImage: "terminal")
+                    }
                     Button("Delete", role: .destructive) { confirmingDelete = true }
                 }
 
                 infoRow("Project folder", workspace.projectPath, monospaced: true)
+                if let terminalNote {
+                    Text(terminalNote).font(.callout).foregroundStyle(.secondary).textSelection(.enabled)
+                }
                 infoRow(
                     "Editor",
                     workspace.editorBundleID.map { store.appName(for: $0) } ?? "Default (Finder)"
@@ -111,6 +120,18 @@ struct WorkspacesView: View {
             }
             .padding(24)
             .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    private func openITerm(_ path: String) {
+        terminalNote = nil
+        Task {
+            do {
+                try await Task.detached(priority: .utility) { try ITermLauncher.open(folder: path) }.value
+                terminalNote = "Opened \(path) in iTerm2."
+            } catch {
+                terminalNote = error.localizedDescription
+            }
         }
     }
 
