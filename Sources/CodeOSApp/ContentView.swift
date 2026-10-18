@@ -2,7 +2,7 @@ import CodeOSCore
 import SwiftUI
 
 enum AppSection: String, CaseIterable, Identifiable {
-    case home, workspaces, workflows, files, applications, developer, monitor, storage, devices, tweaks, preview, gitGraph, gitStudio, terminal, games, doctor, system
+    case home, workspaces, workflows, files, applications, developer, monitor, storage, devices, tweaks, preview, studio, doctor, system
 
     var id: String { rawValue }
 
@@ -19,11 +19,8 @@ enum AppSection: String, CaseIterable, Identifiable {
         case .devices: return "Devices"
         case .tweaks: return "Mac Tweaks"
         case .preview: return "Preview"
-        case .gitGraph: return "Git Graph"
-        case .games: return "Games"
+        case .studio: return "Studio"
         case .doctor: return "Doctor"
-        case .gitStudio: return "Git Studio"
-        case .terminal: return "Terminal"
         case .system: return "System"
         }
     }
@@ -41,11 +38,8 @@ enum AppSection: String, CaseIterable, Identifiable {
         case .devices: return "externaldrive"
         case .tweaks: return "slider.horizontal.3"
         case .preview: return "eye"
-        case .gitGraph: return "arrow.triangle.branch"
-        case .games: return "gamecontroller"
+        case .studio: return "rectangle.split.3x1"
         case .doctor: return "stethoscope"
-        case .gitStudio: return "chevron.left.forwardslash.chevron.right"
-        case .terminal: return "terminal"
         case .system: return "cpu"
         }
     }
@@ -107,11 +101,8 @@ struct ContentView: View {
         case .devices: DevicesView()
         case .tweaks: MacTweaksView()
         case .preview: PreviewView()
-        case .gitGraph: GitGraphView()
-        case .games: GamesView()
+        case .studio: StudioView()
         case .doctor: DoctorView()
-        case .gitStudio: GitStudioView()
-        case .terminal: TerminalSectionView()
         case .system: SystemView()
         }
     }
