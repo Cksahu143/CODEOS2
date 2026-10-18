@@ -15,6 +15,9 @@ struct FilesView: View {
     @State private var creatingFolder = false
     @State private var newFolderName = "untitled folder"
     @State private var confirmingTrash: [FileItem] = []
+    @State private var band: CGRect?
+    @State private var anchorPath: String?
+    @State private var rowFrames: [String: CGRect] = [:]
 
     private var visibleItems: [FileItem] {
         let sorted = DirectoryListing.sorted(items, by: sortKey, ascending: ascending)
@@ -46,11 +49,34 @@ struct FilesView: View {
                         : "Nothing in this folder matches “\(filter)”.",
                     systemImage: "folder")
             } else {
-                List(visibleItems, selection: $selection) { item in
-                    row(item)
-                        .tag(item.path)
-                        .contextMenu { contextActions(item) }
+                ScrollView {
+                    VStack(spacing: 0) {
+                        ForEach(visibleItems) { item in
+                            row(item)
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 5)
+                                .background(selection.contains(item.path) ? Color.accentColor.opacity(0.22) : Color.clear)
+                                .background(GeometryReader { geo in
+                                    Color.clear.preference(key: RowFrameKey.self,
+                                                           value: [item.path: geo.frame(in: .named("fileRows"))])
+                                })
+                                .contentShape(Rectangle())
+                                .contextMenu { contextActions(item) }
+                        }
+                    }
+                    .coordinateSpace(name: "fileRows")
+                    .overlay(alignment: .topLeading) {
+                        if let band {
+                            Rectangle()
+                                .fill(Color.accentColor.opacity(0.15))
+                                .overlay(Rectangle().stroke(Color.accentColor, lineWidth: 1))
+                                .frame(width: band.width, height: band.height)
+                                .offset(x: band.minX, y: band.minY)
+                        }
+                    }
+                    .gesture(rubberBand)
                 }
+                .onPreferenceChange(RowFrameKey.self) { rowFrames = $0 }
             }
             Divider()
             statusBar
@@ -155,6 +181,7 @@ struct FilesView: View {
         }
         .contentShape(Rectangle())
         .onTapGesture(count: 2) { activate(item) }
+        .simultaneousGesture(TapGesture().onEnded { select(item) })
     }
 
     @ViewBuilder
@@ -208,6 +235,12 @@ struct FilesView: View {
             } label: {
                 Label("New Folder", systemImage: "folder.badge.plus")
             }
+            Button {
+                selection = Set(visibleItems.map(\.path))
+            } label: {
+                Label("Select All", systemImage: "checkmark.circle")
+            }
+            .keyboardShortcut("a", modifiers: .command)
             Button {
                 batchRenaming = true
             } label: {
@@ -301,6 +334,43 @@ struct FilesView: View {
                 message = "“\(item.name)” could not be opened with \(app.deletingPathExtension().lastPathComponent): \(error.localizedDescription)"
             }
         }
+    }
+
+    /// Click selection: plain click selects one, Cmd-click toggles, Shift-click selects a range.
+    private func select(_ item: FileItem) {
+        let modifiers = NSEvent.modifierFlags
+        if modifiers.contains(.command) {
+            if selection.contains(item.path) {
+                selection.remove(item.path)
+            } else {
+                selection.insert(item.path)
+            }
+        } else if modifiers.contains(.shift),
+                  let anchor = anchorPath,
+                  let from = visibleItems.firstIndex(where: { $0.path == anchor }),
+                  let to = visibleItems.firstIndex(where: { $0.path == item.path }) {
+            selection = Set(visibleItems[min(from, to)...max(from, to)].map(\.path))
+        } else {
+            selection = [item.path]
+        }
+        anchorPath = item.path
+    }
+
+    /// The Finder-style drag box: every row the box touches becomes selected.
+    private var rubberBand: some Gesture {
+        DragGesture(minimumDistance: 4, coordinateSpace: .named("fileRows"))
+            .onChanged { value in
+                let rect = CGRect(
+                    x: min(value.startLocation.x, value.location.x),
+                    y: min(value.startLocation.y, value.location.y),
+                    width: abs(value.location.x - value.startLocation.x),
+                    height: abs(value.location.y - value.startLocation.y))
+                band = rect
+                selection = Set(rowFrames.filter { $0.value.intersects(rect) }.map { $0.key })
+            }
+            .onEnded { _ in
+                band = nil
+            }
     }
 
     /// Names in a folder, including hidden ones, so collision checks are complete.
@@ -419,6 +489,14 @@ struct FilesView: View {
         if item.isDirectory { return "Folder · modified \(Format.date(item.modified))" }
         let size = item.size.map { Format.bytes($0) } ?? "unknown size"
         return "\(size) · modified \(Format.date(item.modified))"
+    }
+}
+
+/// Collects each row's position so the drag box knows which rows it touches.
+struct RowFrameKey: PreferenceKey {
+    static var defaultValue: [String: CGRect] = [:]
+    static func reduce(value: inout [String: CGRect], nextValue: () -> [String: CGRect]) {
+        value.merge(nextValue()) { _, new in new }
     }
 }
 
