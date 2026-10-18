@@ -20,7 +20,7 @@ struct FakeProbe: EnvironmentProbe {
 
 final class EnvironmentDoctorTests: XCTestCase {
     private let healthy = FakeProbe(
-        existing: ["/opt/local/bin/git", "/Library/Frameworks/Python.framework/Versions/Current/bin/python3",
+        existing: ["/opt/local/bin/git", "/opt/local/bin", "/usr/bin", "/Library/Developer/CommandLineTools",\n                   "/Library/Frameworks/Python.framework/Versions/Current/bin/python3",
                    "/opt/homebrew/bin/node", "/opt/local/bin/port"],
         versions: ["/opt/local/bin/git": "git version 2.45.0",
                    "/Library/Frameworks/Python.framework/Versions/Current/bin/python3": "Python 3.12.3",
