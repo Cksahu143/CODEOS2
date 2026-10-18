@@ -86,7 +86,8 @@ final class GitGraphTests: XCTestCase {
 
         let files = try GitInspector.changedFiles(repository: dir.url.path, commit: rows[0].commit.hash)
         XCTAssertTrue(files.isEmpty || files.allSatisfy { !$0.path.isEmpty })
-        let diff = try GitInspector.diff(repository: dir.url.path, commit: rows[1].commit.hash, path: "b.txt")
+        let feature = try XCTUnwrap(rows.first { $0.commit.subject == "feature work" })
+        let diff = try GitInspector.diff(repository: dir.url.path, commit: feature.commit.hash, path: "b.txt")
         XCTAssertTrue(diff.contains("+2"))
     }
 }
