@@ -51,9 +51,21 @@ public enum GitGraph {
 
     /// Loads recent history from every branch and tag, in Git's date order.
     public static func load(repository: String, limit: Int = 1000) throws -> [GitGraphRow] {
-        guard GitInspector.isRepository(repository) else { throw GitError.notARepository(repository) }
+        let probe = try ProcessRunner.run(
+            executable: GitTool.resolved ?? "/usr/bin/git",
+            arguments: ["rev-parse", "--is-inside-work-tree"],
+            workingDirectory: repository,
+            timeout: 10)
+        let probeText = probe.stdout.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard probe.succeeded, probeText == "true" else {
+            if probe.stderr.lowercased().contains("not a git repository") {
+                throw GitError.notARepository(repository)
+            }
+            let detail = probe.stderr.trimmingCharacters(in: .whitespacesAndNewlines)
+            throw GitError.failed(detail.isEmpty ? "Git could not read this folder." : detail)
+        }
         let result = try ProcessRunner.run(
-            executable: "/usr/bin/git",
+            executable: GitTool.resolved ?? "/usr/bin/git",
             arguments: ["log", "--all", "--date-order", "--max-count=\(limit)", "--format=\(format)"],
             workingDirectory: repository,
             timeout: 30)
@@ -129,7 +141,7 @@ public enum GitInspector {
 
     public static func isRepository(_ path: String) -> Bool {
         guard let result = try? ProcessRunner.run(
-                executable: "/usr/bin/git",
+                executable: GitTool.resolved ?? "/usr/bin/git",
                 arguments: ["rev-parse", "--is-inside-work-tree"],
                 workingDirectory: path,
                 timeout: 5) else { return false }
@@ -139,7 +151,7 @@ public enum GitInspector {
     public static func changedFiles(repository: String, commit: String) throws -> [ChangedFile] {
         guard isValidHash(commit) else { throw GitError.failed("That is not a valid commit.") }
         let result = try ProcessRunner.run(
-            executable: "/usr/bin/git",
+            executable: GitTool.resolved ?? "/usr/bin/git",
             arguments: ["show", "--format=", "--name-status", commit],
             workingDirectory: repository,
             timeout: 30)
@@ -164,7 +176,7 @@ public enum GitInspector {
         var arguments = ["show", "--format=", "--patch", commit]
         if let path { arguments += ["--", path] }
         let result = try ProcessRunner.run(
-            executable: "/usr/bin/git",
+            executable: GitTool.resolved ?? "/usr/bin/git",
             arguments: arguments,
             workingDirectory: repository,
             timeout: 30)

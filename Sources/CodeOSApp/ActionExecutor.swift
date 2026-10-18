@@ -115,7 +115,7 @@ struct AppActionExecutor: ActionExecutor {
             try NativeOpen.requireFolder(repoPath)
             let result = try await Task.detached(priority: .utility) {
                 try ProcessRunner.run(
-                    executable: "/usr/bin/git",
+                    executable: GitTool.resolved ?? "/usr/bin/git",
                     arguments: ["status", "--porcelain=v1", "--branch"],
                     workingDirectory: repoPath
                 )

@@ -156,7 +156,7 @@ struct DeveloperToolsView: View {
         do {
             let result = try await Task.detached(priority: .utility) {
                 try ProcessRunner.run(
-                    executable: "/usr/bin/git",
+                    executable: GitTool.resolved ?? "/usr/bin/git",
                     arguments: ["status", "--porcelain=v1", "--branch"],
                     workingDirectory: path
                 )
