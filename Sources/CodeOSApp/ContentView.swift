@@ -2,7 +2,7 @@ import CodeOSCore
 import SwiftUI
 
 enum AppSection: String, CaseIterable, Identifiable {
-    case home, workspaces, workflows, files, applications, developer, monitor, storage, devices, system
+    case home, workspaces, workflows, files, applications, developer, monitor, storage, devices, tweaks, system
 
     var id: String { rawValue }
 
@@ -17,6 +17,7 @@ enum AppSection: String, CaseIterable, Identifiable {
         case .monitor: return "Monitor"
         case .storage: return "Storage"
         case .devices: return "Devices"
+        case .tweaks: return "Mac Tweaks"
         case .system: return "System"
         }
     }
@@ -32,6 +33,7 @@ enum AppSection: String, CaseIterable, Identifiable {
         case .monitor: return "waveform.path.ecg"
         case .storage: return "internaldrive"
         case .devices: return "externaldrive"
+        case .tweaks: return "slider.horizontal.3"
         case .system: return "cpu"
         }
     }
@@ -82,6 +84,7 @@ struct ContentView: View {
         case .monitor: MonitorView()
         case .storage: StorageView()
         case .devices: DevicesView()
+        case .tweaks: MacTweaksView()
         case .system: SystemView()
         }
     }
