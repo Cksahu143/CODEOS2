@@ -2,7 +2,7 @@ import CodeOSCore
 import SwiftUI
 
 enum AppSection: String, CaseIterable, Identifiable {
-    case home, workspaces, workflows, files, applications, developer, monitor, storage, devices, tweaks, preview, gitGraph, gitStudio, games, doctor, system
+    case home, workspaces, workflows, files, applications, developer, monitor, storage, devices, tweaks, preview, gitGraph, gitStudio, terminal, games, doctor, system
 
     var id: String { rawValue }
 
@@ -23,6 +23,7 @@ enum AppSection: String, CaseIterable, Identifiable {
         case .games: return "Games"
         case .doctor: return "Doctor"
         case .gitStudio: return "Git Studio"
+        case .terminal: return "Terminal"
         case .system: return "System"
         }
     }
@@ -44,6 +45,7 @@ enum AppSection: String, CaseIterable, Identifiable {
         case .games: return "gamecontroller"
         case .doctor: return "stethoscope"
         case .gitStudio: return "chevron.left.forwardslash.chevron.right"
+        case .terminal: return "terminal"
         case .system: return "cpu"
         }
     }
@@ -109,6 +111,7 @@ struct ContentView: View {
         case .games: GamesView()
         case .doctor: DoctorView()
         case .gitStudio: GitStudioView()
+        case .terminal: TerminalSectionView()
         case .system: SystemView()
         }
     }
