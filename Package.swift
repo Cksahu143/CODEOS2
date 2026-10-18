@@ -4,13 +4,13 @@ import PackageDescription
 let package = Package(
     name: "CodeOS",
     platforms: [.macOS(.v13)],
-    dependencies: [
-        .package(url: "https://github.com/migueldeicaza/SwiftTerm.git", exact: "1.99.0"),
-    ],
     products: [
         .executable(name: "CodeOS", targets: ["CodeOSApp"]),
         .executable(name: "codeos-fanctl", targets: ["CodeOSFanHelper"]),
         .library(name: "CodeOSCore", targets: ["CodeOSCore"])
+    ],
+    dependencies: [
+        .package(url: "https://github.com/migueldeicaza/SwiftTerm.git", exact: "1.99.0"),
     ],
     targets: [
         .target(name: "CodeOSCore", path: "Sources/CodeOSCore", linkerSettings: [.linkedFramework("IOKit")]),
