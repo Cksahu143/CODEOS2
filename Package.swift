@@ -10,7 +10,7 @@ let package = Package(
         .library(name: "CodeOSCore", targets: ["CodeOSCore"])
     ],
     dependencies: [
-        .package(url: "https://github.com/migueldeicaza/SwiftTerm.git", exact: "1.99.0"),
+        .package(url: "https://github.com/migueldeicaza/SwiftTerm.git", exact: "1.5.1"),
     ],
     targets: [
         .target(name: "CodeOSCore", path: "Sources/CodeOSCore", linkerSettings: [.linkedFramework("IOKit")]),
