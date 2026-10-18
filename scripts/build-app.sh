@@ -17,6 +17,9 @@ lipo -create .build/arm64-apple-macosx/release/CodeOS .build/x86_64-apple-macosx
 lipo -create .build/arm64-apple-macosx/release/codeos-fanctl .build/x86_64-apple-macosx/release/codeos-fanctl \
     -output "$APP/Contents/MacOS/codeos-fanctl"
 cp Resources/Info.plist "$APP/Contents/Info.plist"
+if [ -f Resources/AppIcon.icns ]; then
+  cp Resources/AppIcon.icns "$APP/Contents/Resources/AppIcon.icns"
+fi
 codesign --force --sign - "$APP/Contents/MacOS/codeos-fanctl"
 codesign --force --sign - "$APP"
 
