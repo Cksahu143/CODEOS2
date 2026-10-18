@@ -55,17 +55,32 @@ struct GitGraphView: View {
     @State private var query = ""
     @State private var note: String?
     @State private var loading = false
+    @State private var maxLanes = 1
+    @State private var visibleRows: [GitGraphRow] = []
 
-    private var maxLanes: Int { rows.map(\.laneCount).max() ?? 1 }
 
-    private var filteredRows: [GitGraphRow] {
+    private func recomputeVisible() {
         let needle = query.trimmingCharacters(in: .whitespaces).lowercased()
-        guard !needle.isEmpty else { return rows }
-        return rows.filter { row in
+        visibleRows = needle.isEmpty ? rows : rows.filter { row in
             row.commit.subject.lowercased().contains(needle)
                 || row.commit.author.lowercased().contains(needle)
                 || row.commit.hash.hasPrefix(needle)
         }
+    }
+
+    /// Arrow keys move the selection and keep the new commit in view.
+    private func move(_ direction: MoveCommandDirection, proxy: ScrollViewProxy) {
+        guard !visibleRows.isEmpty else { return }
+        let current = visibleRows.firstIndex { $0.id == selectedID } ?? -1
+        let next: Int
+        switch direction {
+        case .down: next = min(current + 1, visibleRows.count - 1)
+        case .up: next = max(current - 1, 0)
+        default: return
+        }
+        let row = visibleRows[next]
+        select(row)
+        proxy.scrollTo(row.id, anchor: .center)
     }
 
     private var selectedRow: GitGraphRow? {
@@ -88,7 +103,9 @@ struct GitGraphView: View {
                             : (note ?? "This repository has no commits yet."),
                         systemImage: "arrow.triangle.branch")
                 } else {
-                    graphList
+                    ScrollViewReader { proxy in
+                        graphList(proxy: proxy)
+                    }
                 }
             }
             .frame(minWidth: 460)
@@ -97,6 +114,7 @@ struct GitGraphView: View {
         }
         .navigationTitle("Git Graph")
         .task(id: repository) { await load() }
+        .onChange(of: query) { _ in recomputeVisible() }
     }
 
     private var toolbar: some View {
@@ -119,14 +137,15 @@ struct GitGraphView: View {
         .padding(10)
     }
 
-    private var graphList: some View {
+    private func graphList(proxy: ScrollViewProxy) -> some View {
         ScrollView {
             LazyVStack(spacing: 0) {
-                ForEach(filteredRows) { row in
-                    commitRow(row)
+                ForEach(visibleRows) { row in
+                    commitRow(row).id(row.id)
                 }
             }
         }
+        .onMoveCommand { direction in move(direction, proxy: proxy) }
         .overlay(alignment: .bottom) {
             if !query.isEmpty {
                 Text("Showing matches only. Clear the search to see the full graph.")
@@ -238,6 +257,7 @@ struct GitGraphView: View {
     private func load() async {
         guard !repository.isEmpty else {
             rows = []
+            visibleRows = []
             return
         }
         loading = true
@@ -245,6 +265,8 @@ struct GitGraphView: View {
         let path = repository
         do {
             rows = try await Task.detached(priority: .utility) { try GitGraph.load(repository: path) }.value
+            maxLanes = rows.map(\.laneCount).max() ?? 1
+            recomputeVisible()
             note = nil
         } catch {
             rows = []
@@ -253,6 +275,7 @@ struct GitGraphView: View {
         selectedID = nil
         files = []
         diffLines = []
+        recomputeVisible()
     }
 
     private func select(_ row: GitGraphRow) {
