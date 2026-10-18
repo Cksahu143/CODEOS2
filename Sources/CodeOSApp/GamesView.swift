@@ -1,3 +1,4 @@
+import AppKit
 import CodeOSCore
 import SwiftUI
 
@@ -7,6 +8,7 @@ struct GamesView: View {
     @State private var output = ""
     @State private var running: String?
     @State private var note: String?
+    @ObservedObject private var hub = DevServerHub.shared
 
     var body: some View {
         ScrollView {
@@ -27,6 +29,7 @@ struct GamesView: View {
                 if let project {
                     details(project)
                     scripts(project)
+                    preview(project)
                     if !output.isEmpty || running != nil {
                         outputView
                     }
@@ -129,6 +132,68 @@ struct GamesView: View {
             .padding(8)
             .background(.black.opacity(0.85), in: RoundedRectangle(cornerRadius: 8))
             .foregroundStyle(.white)
+        }
+    }
+
+    private func preview(_ project: GameProject) -> some View {
+        let script = project.scripts.first { DevServerHub.previewScripts.contains($0) }
+        let server = hub.server(for: project.path)
+        return VStack(alignment: .leading, spacing: 8) {
+            Text("Live preview").font(.headline)
+            if let script {
+                HStack(spacing: 10) {
+                    if server?.isRunning == true {
+                        Button {
+                            hub.stop(path: project.path)
+                        } label: {
+                            Label("Stop", systemImage: "stop.fill")
+                        }
+                    } else {
+                        Button {
+                            startPreview(project, script: script)
+                        } label: {
+                            Label("Start \(script)", systemImage: "play.fill")
+                        }
+                        .disabled(running != nil)
+                    }
+                    if let link = server?.url {
+                        Button {
+                            NSWorkspace.shared.open(link)
+                        } label: {
+                            Label("Open in Browser", systemImage: "safari")
+                        }
+                        Text(link.absoluteString)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .textSelection(.enabled)
+                    } else if server?.isRunning == true {
+                        ProgressView().controlSize(.small)
+                        Text("Starting…").font(.caption).foregroundStyle(.secondary)
+                    }
+                }
+                if let server, server.portInUse, !server.isRunning {
+                    Text("That port is already in use. Stop the other server, then start the preview again.")
+                        .font(.callout)
+                        .foregroundStyle(.orange)
+                }
+            } else {
+                Text("No dev, start, or serve script is defined in package.json.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    private func startPreview(_ project: GameProject, script: String) {
+        guard let npm = ToolDetector.locate("npm") else {
+            note = "npm was not found. Install Node.js from nodejs.org, then try again."
+            return
+        }
+        do {
+            try hub.start(project: project, script: script, npmPath: npm)
+            note = nil
+        } catch {
+            note = error.localizedDescription
         }
     }
 
