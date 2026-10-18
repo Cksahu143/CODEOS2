@@ -48,6 +48,7 @@ enum AppSection: String, CaseIterable, Identifiable {
 struct ContentView: View {
     @EnvironmentObject private var store: AppStore
     @State private var selection: AppSection? = .home
+    @State private var showPalette = false
 
     var body: some View {
         NavigationSplitView {
@@ -76,6 +77,14 @@ struct ContentView: View {
                 RunReportView(report: report)
             }
         }
+        .sheet(isPresented: $showPalette) {
+            CommandPalette(selection: $selection, isPresented: $showPalette)
+        }
+        .background(
+            Button("") { showPalette = true }
+                .keyboardShortcut("k", modifiers: .command)
+                .hidden()
+        )
     }
 
     @ViewBuilder
