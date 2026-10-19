@@ -2,7 +2,7 @@ import AppKit
 import CodeOSCore
 import SwiftUI
 
-/// One tab for everything: Git, the commit graph, merge preview, games, and the terminal.
+/// One tab for everything. The repository is chosen once, here; Git, Graph, and Merge all read it.
 /// Only the selected pane is created, so an unselected pane never runs in the background.
 struct StudioView: View {
     enum Pane: String, CaseIterable, Identifiable {
@@ -26,25 +26,39 @@ struct StudioView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            HStack(spacing: 12) {
-                Picker("Pane", selection: $pane) {
-                    ForEach(Pane.allCases) { Text($0.title).tag($0) }
-                }
-                .pickerStyle(.segmented)
-                .frame(width: 440)
-                Spacer()
-                Button {
-                    openInVSCode()
-                } label: {
-                    Label("Open in VS Code", systemImage: "chevron.left.forwardslash.chevron.right")
-                }
-                .disabled(repository.isEmpty)
-            }
-            .padding(10)
+            header
             Divider()
             content
         }
         .navigationTitle("Studio")
+    }
+
+    private var header: some View {
+        HStack(spacing: 12) {
+            Button {
+                if let path = FolderPicker.chooseFolder(prompt: "Choose") { repository = path }
+            } label: {
+                Label("Choose Repository…", systemImage: "folder")
+            }
+            Text(repository.isEmpty ? "No repository chosen" : URL(fileURLWithPath: repository).lastPathComponent)
+                .font(.callout)
+                .foregroundStyle(repository.isEmpty ? .secondary : .primary)
+                .lineLimit(1)
+                .help(repository)
+            Picker("Pane", selection: $pane) {
+                ForEach(Pane.allCases) { Text($0.title).tag($0) }
+            }
+            .pickerStyle(.segmented)
+            .frame(width: 400)
+            Spacer()
+            Button {
+                openInVSCode()
+            } label: {
+                Label("Open in VS Code", systemImage: "chevron.left.forwardslash.chevron.right")
+            }
+            .disabled(repository.isEmpty)
+        }
+        .padding(10)
     }
 
     @ViewBuilder
@@ -58,7 +72,7 @@ struct StudioView: View {
         }
     }
 
-    /// Opens the Git repository in VS Code. If VS Code is not installed, says so.
+    /// Opens the chosen repository in VS Code. If VS Code is not installed, says so.
     private func openInVSCode() {
         let folder = URL(fileURLWithPath: repository)
         guard let app = NSWorkspace.shared.urlForApplication(withBundleIdentifier: "com.microsoft.VSCode") else {

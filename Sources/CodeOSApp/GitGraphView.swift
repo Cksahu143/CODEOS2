@@ -119,9 +119,6 @@ struct GitGraphView: View {
 
     private var toolbar: some View {
         HStack(spacing: 10) {
-            Button("Choose Repository…") {
-                if let path = FolderPicker.chooseFolder(prompt: "Choose") { repository = path }
-            }
             Button {
                 Task { await load() }
             } label: {
