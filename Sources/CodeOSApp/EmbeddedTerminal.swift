@@ -5,6 +5,10 @@ import SwiftUI
 
 /// A real shell inside CodeOS, using SwiftTerm. The shell is your login shell, so your PATH,
 /// aliases, and tools (git, node, python3) behave as they do in Terminal.
+///
+/// SwiftTerm must not be added to the view hierarchy during SwiftUI's layout pass: on macOS 13 that
+/// raises an NSException and quits the app. So this returns a plain container, and the terminal is
+/// added to it on the next run-loop turn.
 struct EmbeddedTerminal: NSViewRepresentable {
     let folder: String
     let onExit: (Int32?) -> Void
@@ -13,45 +17,56 @@ struct EmbeddedTerminal: NSViewRepresentable {
         Coordinator()
     }
 
-    func makeNSView(context: Context) -> LocalProcessTerminalView {
-        let view = LocalProcessTerminalView(frame: NSRect(x: 0, y: 0, width: 900, height: 520))
-        context.coordinator.onExit = onExit
-        view.processDelegate = context.coordinator
-        // Start the shell once the view is on screen, so it gets a real size.
-        DispatchQueue.main.async {
-            start(view)
+    func makeNSView(context: Context) -> NSView {
+        let container = NSView(frame: .zero)
+        container.autoresizesSubviews = true
+        let coordinator = context.coordinator
+        coordinator.folder = folder
+        coordinator.onExit = onExit
+        DispatchQueue.main.async { [weak container] in
+            guard let container else { return }
+            let terminal = LocalProcessTerminalView(frame: container.bounds)
+            terminal.autoresizingMask = [.width, .height]
+            terminal.processDelegate = coordinator
+            container.addSubview(terminal)
+            coordinator.terminal = terminal
+            coordinator.start()
         }
-        return view
+        return container
     }
 
-    func updateNSView(_ view: LocalProcessTerminalView, context: Context) {}
-
-    private func start(_ view: LocalProcessTerminalView) {
-        let shell = ProcessInfo.processInfo.environment["SHELL"] ?? "/bin/zsh"
-        view.startProcess(executable: shell, args: ["-l"])
-        view.window?.makeFirstResponder(view)
-        guard let directory = safeFolder(folder) else { return }
-        let line = "cd \(shellQuote(directory)) && clear\n"
-        // Give the shell a moment to print its prompt before typing into it.
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
-            view.send(source: view, data: ArraySlice(Array(line.utf8)))
-        }
-    }
-
-    private func safeFolder(_ path: String) -> String? {
-        var isDirectory: ObjCBool = false
-        guard path.hasPrefix("/"), FileManager.default.fileExists(atPath: path, isDirectory: &isDirectory),
-              isDirectory.boolValue else { return nil }
-        return path
-    }
-
-    /// Wraps a path in single quotes for the shell, so spaces and symbols are never read as code.
-    private func shellQuote(_ path: String) -> String {
-        "'" + path.replacingOccurrences(of: "'", with: "'\\''") + "'"
-    }
+    func updateNSView(_ container: NSView, context: Context) {}
 
     final class Coordinator: NSObject, LocalProcessTerminalViewDelegate {
+        var folder = NSHomeDirectory()
         var onExit: ((Int32?) -> Void)?
+        weak var terminal: LocalProcessTerminalView?
+
+        func start() {
+            guard let terminal else { return }
+            let shell = ProcessInfo.processInfo.environment["SHELL"] ?? "/bin/zsh"
+            terminal.startProcess(executable: shell, args: ["-l"])
+            terminal.window?.makeFirstResponder(terminal)
+            guard let directory = safeFolder(folder) else { return }
+            let line = "cd \(shellQuote(directory)) && clear\n"
+            // Give the shell a moment to print its prompt before typing into it.
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { [weak self] in
+                guard let self, let terminal = self.terminal else { return }
+                terminal.send(source: terminal, data: ArraySlice(Array(line.utf8)))
+            }
+        }
+
+        private func safeFolder(_ path: String) -> String? {
+            var isDirectory: ObjCBool = false
+            guard path.hasPrefix("/"), FileManager.default.fileExists(atPath: path, isDirectory: &isDirectory),
+                  isDirectory.boolValue else { return nil }
+            return path
+        }
+
+        /// Wraps a path in single quotes for the shell, so spaces and symbols are never read as code.
+        private func shellQuote(_ path: String) -> String {
+            "'" + path.replacingOccurrences(of: "'", with: "'\\''") + "'"
+        }
 
         func sizeChanged(source: LocalProcessTerminalView, newCols: Int, newRows: Int) {}
 
