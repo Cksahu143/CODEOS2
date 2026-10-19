@@ -9,12 +9,13 @@ struct MergePreviewView: View {
     @State private var result: MergePreviewResult?
     @State private var note: String?
     @State private var busy = false
+    @State private var confirmingMerge = false
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 14) {
                 Text("Merge preview").font(.title3).fontWeight(.semibold)
-                Text("Nothing in your working tree or branches changes here. Git may write temporary objects while it checks.")
+                Text("The preview changes nothing. Merging only runs when you confirm, and only when no conflicts are predicted.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 HStack(spacing: 10) {
@@ -22,7 +23,7 @@ struct MergePreviewView: View {
                         ForEach(branches, id: \.self) { Text($0).tag($0) }
                     }
                     .frame(width: 220)
-                    Text("merge into or with").foregroundStyle(.secondary)
+                    Text("with").foregroundStyle(.secondary)
                     Picker("Branch B", selection: $branchB) {
                         ForEach(branches, id: \.self) { Text($0).tag($0) }
                     }
@@ -48,6 +49,14 @@ struct MergePreviewView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
         }
         .task(id: repository) { await loadBranches() }
+        .confirmationDialog(
+            "Merge \(branchB) into \(branchA)?",
+            isPresented: $confirmingMerge
+        ) {
+            Button("Merge") { Task { await merge() } }
+        } message: {
+            Text("Git merges \(branchB) into the branch you have checked out. If your current branch is not \(branchA), the result lands on the current branch instead. Check the State pane first.")
+        }
     }
 
     @ViewBuilder
@@ -59,8 +68,11 @@ struct MergePreviewView: View {
                 if predicted.isEmpty {
                     Label("No conflicts predicted", systemImage: "checkmark.circle.fill")
                         .foregroundStyle(.green)
+                    Button("Merge \(branchB) into the current branch…") { confirmingMerge = true }
+                        .buttonStyle(.borderedProminent)
+                        .disabled(busy)
                 } else {
-                    Label("Predicted conflicts in \(predicted.count) file(s)", systemImage: "exclamationmark.triangle.fill")
+                    Label("Predicted conflicts in \(predicted.count) file(s). Merging is blocked until they are resolved.", systemImage: "exclamationmark.triangle.fill")
                         .foregroundStyle(.red)
                     ForEach(predicted, id: \.self) { file in
                         Text(file).font(.system(.callout, design: .monospaced)).padding(.leading, 20)
@@ -79,6 +91,30 @@ struct MergePreviewView: View {
             ForEach(files.prefix(200), id: \.self) { file in
                 Text(file).font(.system(.caption, design: .monospaced)).lineLimit(1).truncationMode(.middle)
             }
+        }
+    }
+
+    private func merge() async {
+        busy = true
+        defer { busy = false }
+        let path = repository
+        let branch = branchB
+        do {
+            let outcome = try await Task.detached(priority: .utility) {
+                try MergeExecution.merge(branch: branch, into: path)
+            }.value
+            switch outcome {
+            case .merged(let output):
+                note = "Merged \(branch). " + output
+            case .conflicts(let output):
+                note = "The merge stopped on conflicts. Resolve them, stage the files, and commit, or abort the merge. The State pane shows the command.\n" + output
+            case .refused(let reason):
+                note = "Merge not started: " + reason
+            }
+            await loadBranches()
+            await preview()
+        } catch {
+            note = error.localizedDescription
         }
     }
 
