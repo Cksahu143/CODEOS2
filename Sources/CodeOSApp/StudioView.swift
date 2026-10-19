@@ -2,11 +2,11 @@ import AppKit
 import CodeOSCore
 import SwiftUI
 
-/// One tab for everything. The repository is chosen once, here; Git, Graph, Merge, and State all read it.
+/// One tab for everything. The repository is chosen once, here; every Git pane reads it.
 /// Only the selected pane is created, so an unselected pane never runs in the background.
 struct StudioView: View {
     enum Pane: String, CaseIterable, Identifiable {
-        case git, graph, merge, state, games, terminal
+        case git, graph, branches, merge, state, games, terminal
 
         var id: String { rawValue }
 
@@ -14,6 +14,7 @@ struct StudioView: View {
             switch self {
             case .git: return "Git"
             case .graph: return "Graph"
+            case .branches: return "Branches"
             case .merge: return "Merge"
             case .state: return "State"
             case .games: return "Games"
@@ -50,7 +51,7 @@ struct StudioView: View {
                 ForEach(Pane.allCases) { Text($0.title).tag($0) }
             }
             .pickerStyle(.segmented)
-            .frame(width: 520)
+            .frame(width: 640)
             Spacer()
             Button {
                 openInVSCode()
@@ -67,6 +68,7 @@ struct StudioView: View {
         switch pane {
         case .git: GitStudioView()
         case .graph: GitGraphView()
+        case .branches: BranchManagerView()
         case .merge: MergePreviewView()
         case .state: RepositoryStateView()
         case .games: GamesView()
