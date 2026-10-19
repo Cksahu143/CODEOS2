@@ -2,11 +2,11 @@ import AppKit
 import CodeOSCore
 import SwiftUI
 
-/// One tab for everything: Git, the commit graph, games, and the terminal.
-/// Each pane stays loaded, so switching panes keeps the terminal session and the Git position.
+/// One tab for everything: Git, the commit graph, merge preview, games, and the terminal.
+/// Only the selected pane is created, so an unselected pane never runs in the background.
 struct StudioView: View {
     enum Pane: String, CaseIterable, Identifiable {
-        case git, graph, games, terminal
+        case git, graph, merge, games, terminal
 
         var id: String { rawValue }
 
@@ -14,6 +14,7 @@ struct StudioView: View {
             switch self {
             case .git: return "Git"
             case .graph: return "Graph"
+            case .merge: return "Merge"
             case .games: return "Games"
             case .terminal: return "Terminal"
             }
@@ -30,7 +31,7 @@ struct StudioView: View {
                     ForEach(Pane.allCases) { Text($0.title).tag($0) }
                 }
                 .pickerStyle(.segmented)
-                .frame(width: 340)
+                .frame(width: 440)
                 Spacer()
                 Button {
                     openInVSCode()
@@ -41,20 +42,20 @@ struct StudioView: View {
             }
             .padding(10)
             Divider()
-            ZStack {
-                pane(.git, GitStudioView())
-                pane(.graph, GitGraphView())
-                pane(.games, GamesView())
-                pane(.terminal, TerminalSectionView())
-            }
+            content
         }
         .navigationTitle("Studio")
     }
 
-    private func pane<Content: View>(_ value: Pane, _ content: Content) -> some View {
-        content
-            .opacity(pane == value ? 1 : 0)
-            .allowsHitTesting(pane == value)
+    @ViewBuilder
+    private var content: some View {
+        switch pane {
+        case .git: GitStudioView()
+        case .graph: GitGraphView()
+        case .merge: MergePreviewView()
+        case .games: GamesView()
+        case .terminal: TerminalSectionView()
+        }
     }
 
     /// Opens the Git repository in VS Code. If VS Code is not installed, says so.
