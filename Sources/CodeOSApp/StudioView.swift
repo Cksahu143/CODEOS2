@@ -6,7 +6,7 @@ import SwiftUI
 /// Only the selected pane is created, so an unselected pane never runs in the background.
 struct StudioView: View {
     enum Pane: String, CaseIterable, Identifiable {
-        case git, graph, branches, diff, merge, state, games, terminal
+        case git, graph, branches, diff, merge, state, editor, games, terminal
 
         var id: String { rawValue }
 
@@ -18,6 +18,7 @@ struct StudioView: View {
             case .diff: return "Diff"
             case .merge: return "Merge"
             case .state: return "State"
+            case .editor: return "Editor"
             case .games: return "Games"
             case .terminal: return "Terminal"
             }
@@ -52,7 +53,7 @@ struct StudioView: View {
                 ForEach(Pane.allCases) { Text($0.title).tag($0) }
             }
             .pickerStyle(.segmented)
-            .frame(width: 740)
+            .frame(width: 860)
             Spacer()
             Button {
                 openInVSCode()
@@ -73,6 +74,7 @@ struct StudioView: View {
         case .diff: DiffPaneView()
         case .merge: MergePreviewView()
         case .state: RepositoryStateView()
+        case .editor: EditorPaneView()
         case .games: GamesView()
         case .terminal: TerminalSectionView()
         }

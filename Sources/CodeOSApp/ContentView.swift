@@ -77,6 +77,9 @@ struct ContentView: View {
                 RunReportView(report: report)
             }
         }
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            DockBar(selection: $selection)
+        }
         .sheet(isPresented: $showPalette) {
             CommandPalette(selection: $selection, isPresented: $showPalette)
         }
