@@ -75,5 +75,6 @@ final class FanSafetyDelegate: NSObject, NSApplicationDelegate {
     func applicationWillTerminate(_ notification: Notification) {
         FanControl.restoreIfNeeded()
         DevServerHub.shared.stopAll()
+        PerformanceMode.shared.restoreOnQuit()
     }
 }

@@ -9,6 +9,7 @@ struct MonitorView: View {
     @State private var lastUpdated: Date?
     @State private var refreshInterval = 5
     @State private var paused = false
+    @ObservedObject private var performance = PerformanceMode.shared
     @State private var thermal: ThermalSnapshot?
     @AppStorage("fanControlEnabled") private var fanControlEnabled = false
     @State private var fanTarget: Double = 2000
@@ -38,6 +39,13 @@ struct MonitorView: View {
                     Text("Every 10 s").tag(10)
                 }
                 .frame(width: 130)
+                Button {
+                    Task { await performance.toggle() }
+                } label: {
+                    Label(performance.isOn ? "Performance: On" : "Performance: Off", systemImage: "bolt.fill")
+                }
+                .tint(performance.isOn ? .orange : nil)
+                .help(performance.status ?? "Lower Low Power Mode and keep the Mac awake. One button, no restart.")
                 Button { paused.toggle() } label: {
                     Label(paused ? "Resume" : "Pause", systemImage: paused ? "play.fill" : "pause.fill")
                 }
