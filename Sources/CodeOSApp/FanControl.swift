@@ -70,7 +70,7 @@ enum FanControl {
 final class FanSafetyDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         FanControl.restoreIfNeeded()
-        FloatingDock.shared.restoreIfNeeded()
+        Task { @MainActor in FloatingDock.shared.restoreIfNeeded() }
     }
 
     func applicationWillTerminate(_ notification: Notification) {

@@ -43,6 +43,7 @@ enum AppIcons {
 }
 
 /// A floating panel that shows the CodeOS dock above other windows. It does not change the system Dock.
+@MainActor
 final class FloatingDock: ObservableObject {
     static let shared = FloatingDock()
 
@@ -81,7 +82,7 @@ final class FloatingDock: ObservableObject {
         panel?.orderFrontRegardless()
         timer?.invalidate()
         timer = Timer.scheduledTimer(withTimeInterval: 2, repeats: true) { [weak self] _ in
-            self?.refreshRunning()
+            Task { @MainActor in self?.refreshRunning() }
         }
     }
 
