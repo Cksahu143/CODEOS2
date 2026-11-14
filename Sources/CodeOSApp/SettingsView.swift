@@ -48,6 +48,7 @@ struct SettingsView: View {
             }
 
             SystemDockSettingsSection()
+            CustomDockSettingsSection()
             Section("Files") {
                 Toggle("Show hidden files", isOn: $store.showHiddenFiles)
             }

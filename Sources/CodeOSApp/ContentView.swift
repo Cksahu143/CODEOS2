@@ -77,8 +77,10 @@ struct ContentView: View {
                 RunReportView(report: report)
             }
         }
-        .safeAreaInset(edge: .bottom, spacing: 0) {
-            DockBar(selection: $selection)
+        .onReceive(NotificationCenter.default.publisher(for: .codeosSelectSection)) { note in
+            if let raw = note.object as? String, let section = AppSection(rawValue: raw) {
+                selection = section
+            }
         }
         .sheet(isPresented: $showPalette) {
             CommandPalette(selection: $selection, isPresented: $showPalette)

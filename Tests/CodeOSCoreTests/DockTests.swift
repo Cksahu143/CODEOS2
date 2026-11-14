@@ -22,12 +22,37 @@ final class DockTests: XCTestCase {
         XCTAssertNotNil(DockRules.problem(for: DockItem(kind: .section, title: "  ", symbol: "house", target: "home")))
     }
 
-    func testRoundTripsThroughJSON() {
-        let data = DockRules.encode(DockRules.defaults)
-        XCTAssertEqual(DockRules.decode(data), DockRules.defaults)
+    func testSpacersAndSeparatorsNeedNoName() {
+        XCTAssertNil(DockRules.problem(for: DockItem(kind: .spacer, title: "", symbol: "", target: "")))
+        XCTAssertNil(DockRules.problem(for: DockItem(kind: .separator, title: "", symbol: "", target: "")))
     }
 
-    func testGarbageDecodesToNil() {
+    func testItemsRoundTripThroughJSON() {
+        let data = DockRules.encode(DockRules.defaults)
+        XCTAssertEqual(DockRules.decode(data), DockRules.defaults)
         XCTAssertNil(DockRules.decode(Data("not json".utf8)))
+    }
+
+    func testAppearanceIsValidated() {
+        var appearance = DockAppearance()
+        XCTAssertNil(DockRules.problem(for: appearance))
+        appearance.backgroundHex = "blue"
+        XCTAssertNotNil(DockRules.problem(for: appearance))
+        appearance = DockAppearance()
+        appearance.opacity = 0.05
+        XCTAssertNotNil(DockRules.problem(for: appearance))
+        appearance = DockAppearance()
+        appearance.iconSize = 300
+        XCTAssertNotNil(DockRules.problem(for: appearance))
+        appearance = DockAppearance()
+        appearance.position = "top"
+        XCTAssertNotNil(DockRules.problem(for: appearance))
+    }
+
+    func testAppearanceRoundTripsThroughJSON() {
+        var appearance = DockAppearance()
+        appearance.backgroundHex = "#112233"
+        appearance.isVisible = true
+        XCTAssertEqual(DockRules.decodeAppearance(DockRules.encodeAppearance(appearance)), appearance)
     }
 }

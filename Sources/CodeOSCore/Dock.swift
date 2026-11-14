@@ -1,10 +1,9 @@
 import Foundation
 
-/// One button on the dock. A dock item can open a section, an app, a folder, or a web link.
-/// It never runs a shell command, so editing the dock cannot run anything on your Mac.
+/// One item on the CodeOS dock. Items open things or group others. None runs a shell command.
 public struct DockItem: Codable, Identifiable, Equatable {
     public enum Kind: String, Codable, CaseIterable {
-        case section, application, folder, link
+        case section, application, folder, link, spacer, separator
     }
 
     public var id: UUID
@@ -24,6 +23,20 @@ public struct DockItem: Codable, Identifiable, Equatable {
     }
 }
 
+/// How the dock looks. Values are checked before they are used.
+public struct DockAppearance: Codable, Equatable {
+    public static let positions = ["bottom", "left", "right"]
+
+    public var backgroundHex: String = "#1E2330"
+    public var opacity: Double = 0.85
+    public var cornerRadius: Double = 18
+    public var iconSize: Double = 44
+    public var position: String = "bottom"
+    public var isVisible: Bool = false
+
+    public init() {}
+}
+
 public enum DockRules {
     public static let defaults: [DockItem] = [
         DockItem(kind: .section, title: "Home", symbol: "house", target: "home"),
@@ -34,8 +47,14 @@ public enum DockRules {
         DockItem(kind: .section, title: "Doctor", symbol: "stethoscope", target: "doctor"),
     ]
 
-    /// Why an item cannot be used, or nil when it is valid.
+    /// Why an item cannot be used, or nil when it is valid. Spacers and separators need no target.
     public static func problem(for item: DockItem) -> String? {
+        switch item.kind {
+        case .spacer, .separator:
+            return nil
+        default:
+            break
+        }
         if item.title.trimmingCharacters(in: .whitespaces).isEmpty {
             return "Give this button a name."
         }
@@ -52,7 +71,23 @@ public enum DockRules {
             return nil
         case .link:
             return Validation.isWebURL(target) ? nil : "The link must start with http:// or https://."
+        case .spacer, .separator:
+            return nil
         }
+    }
+
+    public static func problem(for appearance: DockAppearance) -> String? {
+        if !isHexColor(appearance.backgroundHex) { return "Use a color like #1E2330." }
+        if !(0.2...1.0).contains(appearance.opacity) { return "Opacity must be between 0.2 and 1." }
+        if !(24.0...96.0).contains(appearance.iconSize) { return "Icon size must be between 24 and 96." }
+        if !(0.0...40.0).contains(appearance.cornerRadius) { return "Corner radius must be between 0 and 40." }
+        if !DockAppearance.positions.contains(appearance.position) { return "Position must be bottom, left, or right." }
+        return nil
+    }
+
+    public static func isHexColor(_ text: String) -> Bool {
+        guard text.count == 7, text.hasPrefix("#") else { return false }
+        return text.dropFirst().allSatisfy { $0.isHexDigit }
     }
 
     public static func encode(_ items: [DockItem]) -> Data {
@@ -61,5 +96,13 @@ public enum DockRules {
 
     public static func decode(_ data: Data) -> [DockItem]? {
         try? JSONDecoder().decode([DockItem].self, from: data)
+    }
+
+    public static func encodeAppearance(_ appearance: DockAppearance) -> Data {
+        (try? JSONEncoder().encode(appearance)) ?? Data()
+    }
+
+    public static func decodeAppearance(_ data: Data) -> DockAppearance? {
+        try? JSONDecoder().decode(DockAppearance.self, from: data)
     }
 }

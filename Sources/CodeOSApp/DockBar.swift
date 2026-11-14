@@ -2,23 +2,41 @@ import AppKit
 import CodeOSCore
 import SwiftUI
 
-/// Holds the dock items and saves them whenever they change.
+extension Notification.Name {
+    /// Posted by the dock to switch the CodeOS window to a section. The object is the section's raw name.
+    static let codeosSelectSection = Notification.Name("codeosSelectSection")
+}
+
+/// The dock's items and appearance. Both are saved whenever they change.
 @MainActor
 final class DockModel: ObservableObject {
     static let shared = DockModel()
-    private static let key = "dockItems"
+    private static let itemsKey = "dockItems"
+    private static let appearanceKey = "dockAppearance"
 
     @Published var items: [DockItem] {
         didSet {
-            UserDefaults.standard.set(DockRules.encode(items), forKey: DockModel.key)
+            UserDefaults.standard.set(DockRules.encode(items), forKey: DockModel.itemsKey)
+        }
+    }
+
+    @Published var appearance: DockAppearance {
+        didSet {
+            UserDefaults.standard.set(DockRules.encodeAppearance(appearance), forKey: DockModel.appearanceKey)
         }
     }
 
     private init() {
-        if let data = UserDefaults.standard.data(forKey: DockModel.key), let saved = DockRules.decode(data) {
+        if let data = UserDefaults.standard.data(forKey: DockModel.itemsKey), let saved = DockRules.decode(data) {
             items = saved
         } else {
             items = DockRules.defaults
+        }
+        if let data = UserDefaults.standard.data(forKey: DockModel.appearanceKey),
+           let saved = DockRules.decodeAppearance(data) {
+            appearance = saved
+        } else {
+            appearance = DockAppearance()
         }
     }
 
@@ -42,46 +60,14 @@ final class DockModel: ObservableObject {
     }
 }
 
-/// The dock along the bottom of CodeOS. Each button opens a section, app, folder, or link.
-struct DockBar: View {
-    @Binding var selection: AppSection?
-    @ObservedObject private var dock = DockModel.shared
-    @State private var editing = false
-
-    var body: some View {
-        HStack(spacing: 8) {
-            ForEach(dock.items) { item in
-                Button {
-                    activate(item)
-                } label: {
-                    Label(item.title, systemImage: item.symbol)
-                }
-                .buttonStyle(.bordered)
-                .help(item.target)
-            }
-            Spacer()
-            Button {
-                editing = true
-            } label: {
-                Label("Edit Dock", systemImage: "slider.horizontal.3")
-            }
-            .labelStyle(.iconOnly)
-            .help("Add, remove, or rearrange dock buttons")
-        }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 6)
-        .background(.bar)
-        .sheet(isPresented: $editing) {
-            DockEditor()
-        }
-    }
-
-    private func activate(_ item: DockItem) {
+/// What a dock button does. Each action opens something; none runs a shell command.
+@MainActor
+enum DockActions {
+    static func activate(_ item: DockItem) {
         switch item.kind {
         case .section:
-            if let section = AppSection(rawValue: item.target) {
-                selection = section
-            }
+            NotificationCenter.default.post(name: .codeosSelectSection, object: item.target)
+            NSApp.activate(ignoringOtherApps: true)
         case .application:
             if let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: item.target) {
                 NSWorkspace.shared.openApplication(at: url, configuration: NSWorkspace.OpenConfiguration(), completionHandler: nil)
@@ -92,109 +78,30 @@ struct DockBar: View {
             if let url = URL(string: item.target) {
                 NSWorkspace.shared.open(url)
             }
+        case .spacer, .separator:
+            break
         }
     }
 }
 
-/// Edits the dock: names, symbols, targets, order, and removal. Each row shows why it is not valid yet.
-struct DockEditor: View {
-    @ObservedObject private var dock = DockModel.shared
-    @Environment(\.dismiss) private var dismiss
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack {
-                Text("Customize Dock").font(.title3).fontWeight(.semibold)
-                Spacer()
-                Button("Add Section") {
-                    dock.add(DockItem(kind: .section, title: "New", symbol: "square", target: "home"))
-                }
-                Button("Add Link") {
-                    dock.add(DockItem(kind: .link, title: "Docs", symbol: "book", target: "https://"))
-                }
-                Button("Reset to Defaults") { dock.resetToDefaults() }
-            }
-            List {
-                ForEach($dock.items) { $item in
-                    row($item)
-                }
-            }
-            HStack {
-                Text("Dock buttons open things only. They never run commands.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                Spacer()
-                Button("Done") { dismiss() }
-                    .keyboardShortcut(.defaultAction)
-            }
-        }
-        .padding(16)
-        .frame(width: 720, height: 520)
+extension Color {
+    /// Builds a color from "#RRGGBB".
+    init(hex: String) {
+        let digits = hex.trimmingCharacters(in: CharacterSet(charactersIn: "#"))
+        let value = UInt64(digits, radix: 16) ?? 0
+        self.init(
+            red: Double((value >> 16) & 0xFF) / 255,
+            green: Double((value >> 8) & 0xFF) / 255,
+            blue: Double(value & 0xFF) / 255)
     }
 
-    private func row(_ item: Binding<DockItem>) -> some View {
-        let current = item.wrappedValue
-        let problem = DockRules.problem(for: current)
-        return VStack(alignment: .leading, spacing: 4) {
-            HStack(spacing: 8) {
-                TextField("Name", text: item.title)
-                    .frame(width: 130)
-                TextField("SF Symbol", text: item.symbol)
-                    .frame(width: 150)
-                Picker("Kind", selection: item.kind) {
-                    Text("Section").tag(DockItem.Kind.section)
-                    Text("App").tag(DockItem.Kind.application)
-                    Text("Folder").tag(DockItem.Kind.folder)
-                    Text("Link").tag(DockItem.Kind.link)
-                }
-                .labelsHidden()
-                .frame(width: 110)
-                Spacer()
-                Button {
-                    dock.move(current.id, by: -1)
-                } label: {
-                    Image(systemName: "arrow.up")
-                }
-                Button {
-                    dock.move(current.id, by: 1)
-                } label: {
-                    Image(systemName: "arrow.down")
-                }
-                Button(role: .destructive) {
-                    dock.remove(current.id)
-                } label: {
-                    Image(systemName: "trash")
-                }
-            }
-            HStack(spacing: 8) {
-                TextField(placeholder(current.kind), text: item.target)
-                if current.kind == .folder {
-                    Button("Choose…") {
-                        if let path = FolderPicker.chooseFolder(prompt: "Choose") { item.wrappedValue.target = path }
-                    }
-                }
-                if current.kind == .application {
-                    Button("Choose App…") {
-                        if let app = FolderPicker.chooseApplication(),
-                           let bundleID = Bundle(url: app)?.bundleIdentifier {
-                            item.wrappedValue.target = bundleID
-                        }
-                    }
-                }
-            }
-            if let problem {
-                Text(problem).font(.caption).foregroundStyle(.red)
-            }
-        }
-        .padding(.vertical, 4)
-    }
-
-    private func placeholder(_ kind: DockItem.Kind) -> String {
-        switch kind {
-        case .section: return "Section: home, studio, files, applications, monitor, doctor"
-        case .application: return "Bundle identifier, such as com.apple.Terminal"
-        case .folder: return "Absolute folder path"
-        case .link: return "https://example.com"
-        }
+    /// The color as "#RRGGBB", in sRGB.
+    var hexString: String {
+        let color = NSColor(self).usingColorSpace(.sRGB) ?? NSColor.black
+        return String(
+            format: "#%02X%02X%02X",
+            Int32(color.redComponent * 255),
+            Int32(color.greenComponent * 255),
+            Int32(color.blueComponent * 255))
     }
 }
