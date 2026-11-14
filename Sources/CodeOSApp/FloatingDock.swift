@@ -42,7 +42,8 @@ enum AppIcons {
     }
 }
 
-/// A floating panel that shows the CodeOS dock above other windows. It does not change the system Dock.
+/// The floating CodeOS dock. Its size changes only when items or appearance change, so it never jumps under the pointer.
+/// Hover previews live in a separate window that ignores the mouse.
 @MainActor
 final class FloatingDock: ObservableObject {
     static let shared = FloatingDock()
@@ -53,6 +54,7 @@ final class FloatingDock: ObservableObject {
     @Published private(set) var needsPermission = false
 
     private var panel: NSPanel?
+    private var bubble: NSPanel?
     private var timer: Timer?
 
     func setVisible(_ visible: Bool) {
@@ -75,7 +77,7 @@ final class FloatingDock: ObservableObject {
 
     func show() {
         if panel == nil {
-            build()
+            buildDock()
         }
         refreshRunning()
         resize()
@@ -93,42 +95,89 @@ final class FloatingDock: ObservableObject {
         panel?.orderOut(nil)
     }
 
-    /// Called when the pointer enters a tile. Looks up windows and thumbnails for running apps only.
+    /// Called when the pointer enters or leaves a tile. Only moves the bubble; the dock itself does not resize.
     func hover(_ item: DockItem?) {
         guard item != hoveredItem else { return }
         hoveredItem = item
         previews = []
         needsPermission = false
-        guard let item, item.kind == .application,
-              let app = NSRunningApplication.runningApplications(withBundleIdentifier: item.target).first else { return }
-        guard WindowPreviews.hasPermission else {
-            needsPermission = true
-            return
+        if let item, item.kind == .application,
+           let app = NSRunningApplication.runningApplications(withBundleIdentifier: item.target).first {
+            if WindowPreviews.hasPermission {
+                previews = WindowPreviews.windows(forProcess: app.processIdentifier).prefix(4).map { window in
+                    WindowPreview(id: window.id, title: window.title, image: WindowPreviews.thumbnail(windowID: window.id))
+                }
+            } else {
+                needsPermission = true
+            }
         }
-        previews = WindowPreviews.windows(forProcess: app.processIdentifier).prefix(4).map { window in
-            WindowPreview(id: window.id, title: window.title, image: WindowPreviews.thumbnail(windowID: window.id))
+        // Wait one run-loop turn so SwiftUI has laid out the new bubble before it is measured.
+        DispatchQueue.main.async { [weak self] in
+            self?.placeBubble()
         }
     }
 
-    /// Fits the panel to its contents and anchors it to the chosen edge, so it grows toward the screen's middle.
+    /// Fits the dock to its contents. Keeps the spot the user chose, so it does not snap back to the default edge.
     func resize() {
-        guard let panel, let hosting = panel.contentView as? NSHostingView<FloatingDockView> else { return }
+        guard let panel, let hosting = panel.contentView as? NSHostingView<FloatingDockView>,
+              let screen = NSScreen.main?.visibleFrame else { return }
+        let before = panel.frame
+        let wasShown = panel.isVisible
         let size = hosting.fittingSize
         panel.setContentSize(size)
-        guard let screen = NSScreen.main?.visibleFrame else { return }
+        let position = DockModel.shared.appearance.position
+        var origin: NSPoint
+        if wasShown {
+            switch position {
+            case "left":
+                origin = NSPoint(x: before.minX, y: before.midY - size.height / 2)
+            case "right":
+                origin = NSPoint(x: before.maxX - size.width, y: before.midY - size.height / 2)
+            default:
+                origin = NSPoint(x: before.midX - size.width / 2, y: before.minY)
+            }
+        } else {
+            switch position {
+            case "left":
+                origin = NSPoint(x: screen.minX + 12, y: screen.midY - size.height / 2)
+            case "right":
+                origin = NSPoint(x: screen.maxX - size.width - 12, y: screen.midY - size.height / 2)
+            default:
+                origin = NSPoint(x: screen.midX - size.width / 2, y: screen.minY + 12)
+            }
+        }
+        origin.x = min(max(origin.x, screen.minX), screen.maxX - size.width)
+        origin.y = min(max(origin.y, screen.minY), screen.maxY - size.height)
+        panel.setFrameOrigin(origin)
+        placeBubble()
+    }
+
+    private func placeBubble() {
+        guard let panel, panel.isVisible, hoveredItem != nil else {
+            bubble?.orderOut(nil)
+            return
+        }
+        if bubble == nil {
+            buildBubble()
+        }
+        guard let bubble, let hosting = bubble.contentView as? NSHostingView<HoverBubbleView> else { return }
+        let size = hosting.fittingSize
+        bubble.setContentSize(size)
+        let frame = panel.frame
         let origin: NSPoint
         switch DockModel.shared.appearance.position {
         case "left":
-            origin = NSPoint(x: screen.minX + 12, y: screen.midY - size.height / 2)
+            origin = NSPoint(x: frame.maxX + 10, y: frame.midY - size.height / 2)
         case "right":
-            origin = NSPoint(x: screen.maxX - size.width - 12, y: screen.midY - size.height / 2)
+            origin = NSPoint(x: frame.minX - size.width - 10, y: frame.midY - size.height / 2)
         default:
-            origin = NSPoint(x: screen.midX - size.width / 2, y: screen.minY + 12)
+            origin = NSPoint(x: frame.midX - size.width / 2, y: frame.maxY + 10)
         }
-        panel.setFrameOrigin(origin)
+        bubble.setFrameOrigin(origin)
+        bubble.orderFrontRegardless()
     }
 
-    private func build() {
+    private func buildDock() {
         let window = NSPanel(
             contentRect: NSRect(x: 0, y: 0, width: 100, height: 60),
             styleMask: [.borderless, .nonactivatingPanel],
@@ -144,10 +193,74 @@ final class FloatingDock: ObservableObject {
         panel = window
     }
 
+    private func buildBubble() {
+        let window = NSPanel(
+            contentRect: NSRect(x: 0, y: 0, width: 200, height: 60),
+            styleMask: [.borderless, .nonactivatingPanel],
+            backing: .buffered,
+            defer: false)
+        window.level = .floating
+        window.isOpaque = false
+        window.backgroundColor = .clear
+        window.hasShadow = true
+        window.ignoresMouseEvents = true
+        window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary]
+        window.contentView = NSHostingView(rootView: HoverBubbleView(dock: self))
+        bubble = window
+    }
+
     private func refreshRunning() {
         let ids = Set(NSWorkspace.shared.runningApplications.compactMap { $0.bundleIdentifier })
         if ids != runningBundleIDs {
             runningBundleIDs = ids
+        }
+    }
+}
+
+/// The name and window previews above a hovered icon. It lives in its own window, so it never moves the dock.
+struct HoverBubbleView: View {
+    @ObservedObject var dock: FloatingDock
+
+    var body: some View {
+        if let item = dock.hoveredItem {
+            VStack(spacing: 6) {
+                Text(item.title)
+                    .font(.caption.weight(.semibold))
+                if dock.needsPermission {
+                    VStack(spacing: 4) {
+                        Text("Window previews need Screen Recording permission.")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                        Button("Allow…") { WindowPreviews.requestPermission() }
+                            .controlSize(.small)
+                    }
+                } else if !dock.previews.isEmpty {
+                    HStack(spacing: 8) {
+                        ForEach(dock.previews) { preview in
+                            VStack(spacing: 3) {
+                                if let image = preview.image {
+                                    Image(nsImage: image)
+                                        .resizable()
+                                        .scaledToFit()
+                                        .frame(width: 150, height: 94)
+                                        .clipShape(RoundedRectangle(cornerRadius: 6))
+                                } else {
+                                    RoundedRectangle(cornerRadius: 6)
+                                        .fill(Color.secondary.opacity(0.2))
+                                        .frame(width: 150, height: 94)
+                                }
+                                Text(preview.title)
+                                    .font(.caption2)
+                                    .lineLimit(1)
+                                    .frame(width: 150)
+                            }
+                        }
+                    }
+                }
+            }
+            .padding(8)
+            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 10))
+            .fixedSize()
         }
     }
 }
@@ -159,10 +272,7 @@ struct FloatingDockView: View {
     var body: some View {
         let style = model.appearance
         let vertical = style.position != "bottom"
-        VStack(spacing: 6) {
-            if let hovered = dock.hoveredItem {
-                bubble(hovered)
-            }
+        Group {
             if vertical {
                 VStack(spacing: 6) { tiles(vertical: true) }
             } else {
@@ -174,54 +284,10 @@ struct FloatingDockView: View {
             RoundedRectangle(cornerRadius: style.cornerRadius)
                 .fill(Color(hex: style.backgroundHex).opacity(style.opacity)))
         .onHover { inside in
-            if !inside { dock.hover(nil) }
+            if !inside { FloatingDock.shared.hover(nil) }
         }
         .onChange(of: model.appearance) { _ in FloatingDock.shared.resize() }
         .onChange(of: model.items) { _ in FloatingDock.shared.resize() }
-        .onChange(of: dock.hoveredItem) { _ in FloatingDock.shared.resize() }
-        .onChange(of: dock.previews.count) { _ in FloatingDock.shared.resize() }
-        .onChange(of: dock.needsPermission) { _ in FloatingDock.shared.resize() }
-    }
-
-    @ViewBuilder
-    private func bubble(_ item: DockItem) -> some View {
-        VStack(spacing: 6) {
-            Text(item.title)
-                .font(.caption.weight(.semibold))
-            if dock.needsPermission {
-                VStack(spacing: 4) {
-                    Text("Window previews need Screen Recording permission.")
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                    Button("Allow…") { WindowPreviews.requestPermission() }
-                        .controlSize(.small)
-                }
-            } else if !dock.previews.isEmpty {
-                HStack(spacing: 8) {
-                    ForEach(dock.previews) { preview in
-                        VStack(spacing: 3) {
-                            if let image = preview.image {
-                                Image(nsImage: image)
-                                    .resizable()
-                                    .scaledToFit()
-                                    .frame(width: 150, height: 94)
-                                    .clipShape(RoundedRectangle(cornerRadius: 6))
-                            } else {
-                                RoundedRectangle(cornerRadius: 6)
-                                    .fill(Color.secondary.opacity(0.2))
-                                    .frame(width: 150, height: 94)
-                            }
-                            Text(preview.title)
-                                .font(.caption2)
-                                .lineLimit(1)
-                                .frame(width: 150)
-                        }
-                    }
-                }
-            }
-        }
-        .padding(8)
-        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 10))
     }
 
     @ViewBuilder
@@ -254,7 +320,11 @@ struct FloatingDockView: View {
             }
             .buttonStyle(.plain)
             .onHover { inside in
-                if inside { FloatingDock.shared.hover(item) }
+                if inside {
+                    FloatingDock.shared.hover(item)
+                } else if FloatingDock.shared.hoveredItem?.id == item.id {
+                    FloatingDock.shared.hover(nil)
+                }
             }
             .help(item.title)
         }
