@@ -36,12 +36,18 @@ public enum FanController {
         let high = Int(maxValue.rounded(.down))
         guard rpm >= low, rpm <= high else { throw FanControlError.outOfRange(min: low, max: high) }
 
-        guard smc.writeUInt8("F\(fan)Md", 1), smc.writeFPE2("F\(fan)Tg", rpm) else {
-            _ = smc.writeUInt8("F\(fan)Md", 0)
-            throw FanControlError.writeRejected("the SMC refused the speed change")
+        let modeKey = "F\(fan)Md"
+        let targetKey = "F\(fan)Tg"
+        guard smc.writeUInt8(modeKey, 1) else {
+            _ = smc.writeUInt8(modeKey, 0)
+            throw FanControlError.writeRejected("the SMC refused manual mode (\(smc.describe(modeKey)))")
         }
-        guard smc.value("F\(fan)Md") == 1, let target = smc.value("F\(fan)Tg"), abs(target - Double(rpm)) < 50 else {
-            _ = smc.writeUInt8("F\(fan)Md", 0)
+        guard smc.writeRPM(targetKey, rpm) else {
+            _ = smc.writeUInt8(modeKey, 0)
+            throw FanControlError.writeRejected("the SMC refused \(rpm) RPM (\(smc.describe(targetKey)))")
+        }
+        guard smc.value(modeKey) == 1, let target = smc.value(targetKey), abs(target - Double(rpm)) < 50 else {
+            _ = smc.writeUInt8(modeKey, 0)
             throw FanControlError.verificationFailed("the SMC did not confirm the speed, so the fan was returned to automatic")
         }
     }
@@ -55,5 +61,16 @@ public enum FanController {
                 throw FanControlError.verificationFailed("fan \(fan + 1) did not return to automatic")
             }
         }
+    }
+
+    /// A read-only report of the keys a fan change uses. Writes nothing.
+    public static func inspect(fan: Int) -> String {
+        guard let smc = SMC() else { return "AppleSMC is not available." }
+        var lines: [String] = []
+        for key in ["F\(fan)Md", "F\(fan)Tg", "F\(fan)Mn", "F\(fan)Mx", "F\(fan)Ac"] {
+            let value = smc.value(key).map { String($0) } ?? "unreadable"
+            lines.append(smc.describe(key) + ", value " + value)
+        }
+        return lines.joined(separator: "\n")
     }
 }

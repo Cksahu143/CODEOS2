@@ -151,6 +151,31 @@ final class SMC {
         return output[40] == 0
     }
 
+    /// Writes a fan target speed in the number format this key uses on this Mac.
+    /// Intel fan targets are stored as fpe2 on some models and as a 32-bit float (flt) on others.
+    func writeRPM(_ key: String, _ rpm: Int) -> Bool {
+        guard let info = keyInfo(key) else { return false }
+        switch info.1 {
+        case "fpe2":
+            guard rpm >= 0, rpm * 4 <= 0xFFFF else { return false }
+            let raw = UInt16(rpm * 4)
+            return write(key, type: "fpe2", bytes: [UInt8(raw >> 8), UInt8(raw & 0xff)])
+        case "flt ":
+            let bits = Float(rpm).bitPattern
+            return write(key, type: "flt ", bytes: [
+                UInt8(bits & 0xff), UInt8(bits >> 8 & 0xff), UInt8(bits >> 16 & 0xff), UInt8(bits >> 24 & 0xff),
+            ])
+        default:
+            return false
+        }
+    }
+
+    /// Type and size of a key, for diagnostics. Read-only.
+    func describe(_ key: String) -> String {
+        guard let info = keyInfo(key) else { return "\(key) not found" }
+        return "\(key) has type '\(info.1)' and \(info.0) bytes"
+    }
+
     /// Fan mode: 0 = automatic, 1 = manual.
     func writeUInt8(_ key: String, _ value: UInt8) -> Bool {
         write(key, type: "ui8 ", bytes: [value])
